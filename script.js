@@ -5,10 +5,13 @@ const cursorGlow = document.querySelector(".cursor-glow");
 const musicToggle = document.querySelector(".music-toggle");
 const canUseCursorGlow = window.matchMedia("(hover: hover) and (pointer: fine)").matches;
 const AudioContextConstructor = window.AudioContext || window.webkitAudioContext;
+const MUSIC_VOLUME = 0.16;
+const MUTED_VOLUME = 0.0001;
 
 let audioContext;
 let musicGain;
 let musicLoopTimer;
+let padNodes = [];
 let isMusicMuted = false;
 
 const lullabyNotes = [
@@ -31,13 +34,13 @@ function scheduleMusicNote(frequency, startTime, duration, isAccent) {
   tone.type = isAccent ? "triangle" : "sine";
   tone.frequency.setValueAtTime(frequency, startTime);
   toneGain.gain.setValueAtTime(0.0001, startTime);
-  toneGain.gain.exponentialRampToValueAtTime(isAccent ? 0.12 : 0.075, startTime + 0.08);
+  toneGain.gain.exponentialRampToValueAtTime(isAccent ? 0.32 : 0.22, startTime + 0.08);
   toneGain.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
 
   chime.type = "sine";
   chime.frequency.setValueAtTime(frequency * 2, startTime + 0.02);
   chimeGain.gain.setValueAtTime(0.0001, startTime);
-  chimeGain.gain.exponentialRampToValueAtTime(0.028, startTime + 0.1);
+  chimeGain.gain.exponentialRampToValueAtTime(0.075, startTime + 0.1);
   chimeGain.gain.exponentialRampToValueAtTime(0.0001, startTime + Math.min(duration, 0.9));
 
   tone.connect(toneGain);
@@ -49,6 +52,27 @@ function scheduleMusicNote(frequency, startTime, duration, isAccent) {
   chime.start(startTime);
   tone.stop(startTime + duration + 0.08);
   chime.stop(startTime + duration + 0.08);
+}
+
+function startHarmonyPad() {
+  if (padNodes.length > 0) {
+    return;
+  }
+
+  [130.81, 196, 261.63].forEach((frequency, index) => {
+    const pad = audioContext.createOscillator();
+    const padGain = audioContext.createGain();
+
+    pad.type = index === 1 ? "triangle" : "sine";
+    pad.frequency.setValueAtTime(frequency, audioContext.currentTime);
+    padGain.gain.setValueAtTime(0.0001, audioContext.currentTime);
+    padGain.gain.exponentialRampToValueAtTime(index === 1 ? 0.035 : 0.024, audioContext.currentTime + 1.1);
+
+    pad.connect(padGain);
+    padGain.connect(musicGain);
+    pad.start();
+    padNodes.push({ pad, padGain });
+  });
 }
 
 function scheduleMusicLoop() {
@@ -98,6 +122,7 @@ function startBackgroundMusic() {
     musicGain.connect(musicFilter);
     musicFilter.connect(audioContext.destination);
 
+    startHarmonyPad();
     scheduleMusicLoop();
     musicLoopTimer = window.setInterval(scheduleMusicLoop, 7200);
   }
@@ -105,7 +130,7 @@ function startBackgroundMusic() {
   audioContext
     .resume()
     .then(() => {
-      fadeMusicVolume(isMusicMuted ? 0.0001 : 0.045);
+      fadeMusicVolume(isMusicMuted ? MUTED_VOLUME : MUSIC_VOLUME);
       updateMusicButton();
     })
     .catch(() => {
@@ -187,6 +212,6 @@ musicToggle.addEventListener("click", () => {
   }
 
   isMusicMuted = !isMusicMuted;
-  fadeMusicVolume(isMusicMuted ? 0.0001 : 0.045);
+  fadeMusicVolume(isMusicMuted ? MUTED_VOLUME : MUSIC_VOLUME);
   updateMusicButton();
 });
