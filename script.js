@@ -5,8 +5,9 @@ const cursorGlow = document.querySelector(".cursor-glow");
 const musicToggle = document.querySelector(".music-toggle");
 const canUseCursorGlow = window.matchMedia("(hover: hover) and (pointer: fine)").matches;
 const AudioContextConstructor = window.AudioContext || window.webkitAudioContext;
-const introVoiceover = document.querySelector('[data-voiceover="intro"]') || new Audio("assets/intro.mp3");
-const insideVoiceover = document.querySelector('[data-voiceover="inside"]') || new Audio("assets/inside-letter.mp3");
+const INTRO_VOICEOVER_SRC = "assets/intro.mp3";
+const INSIDE_VOICEOVER_SRC = "assets/inside-letter.mp3";
+const voiceoverPlayer = document.querySelector('[data-voiceover="player"]') || new Audio(INTRO_VOICEOVER_SRC);
 const MUSIC_VOLUME = 0.16;
 const VOICEOVER_DUCKED_MUSIC_VOLUME = 0.045;
 const MUTED_VOLUME = 0.0001;
@@ -23,30 +24,31 @@ let hasInsideVoiceoverPlayed = false;
 let isWaitingForIntroVoiceover = false;
 let introOpenFallbackTimer;
 
-introVoiceover.preload = "auto";
-introVoiceover.autoplay = true;
-insideVoiceover.preload = "auto";
+voiceoverPlayer.preload = "auto";
+voiceoverPlayer.autoplay = true;
 
-[introVoiceover, insideVoiceover].forEach((voiceover) => {
-  voiceover.addEventListener("play", () => {
-    isVoiceoverSpeaking = true;
+voiceoverPlayer.addEventListener("play", () => {
+  isVoiceoverSpeaking = true;
+  fadeMusicVolume();
+});
+
+["ended", "pause", "error"].forEach((eventName) => {
+  voiceoverPlayer.addEventListener(eventName, () => {
+    isVoiceoverSpeaking = !voiceoverPlayer.paused;
     fadeMusicVolume();
   });
-
-  ["ended", "pause", "error"].forEach((eventName) => {
-    voiceover.addEventListener(eventName, () => {
-      isVoiceoverSpeaking = !introVoiceover.paused || !insideVoiceover.paused;
-      fadeMusicVolume();
-    });
-  });
 });
 
-introVoiceover.addEventListener("play", () => {
-  hasIntroVoiceoverStarted = true;
+voiceoverPlayer.addEventListener("play", () => {
+  if (isVoiceoverSource(INTRO_VOICEOVER_SRC)) {
+    hasIntroVoiceoverStarted = true;
+  }
 });
 
-introVoiceover.addEventListener("ended", () => {
-  hasIntroVoiceoverFinished = true;
+voiceoverPlayer.addEventListener("ended", () => {
+  if (isVoiceoverSource(INTRO_VOICEOVER_SRC)) {
+    hasIntroVoiceoverFinished = true;
+  }
 });
 
 const lullabyNotes = [
@@ -181,12 +183,25 @@ function startBackgroundMusic() {
     });
 }
 
+function isVoiceoverSource(source) {
+  const currentSource = voiceoverPlayer.currentSrc || voiceoverPlayer.getAttribute("src") || "";
+  return currentSource.endsWith(source);
+}
+
+function setVoiceoverSource(source) {
+  if (isVoiceoverSource(source)) {
+    return;
+  }
+
+  voiceoverPlayer.pause();
+  voiceoverPlayer.src = source;
+  voiceoverPlayer.load();
+}
+
 function stopVoiceover() {
   isVoiceoverSpeaking = false;
-  [introVoiceover, insideVoiceover].forEach((voiceover) => {
-    voiceover.pause();
-    voiceover.currentTime = 0;
-  });
+  voiceoverPlayer.pause();
+  voiceoverPlayer.currentTime = 0;
   fadeMusicVolume();
 }
 
@@ -197,10 +212,10 @@ function playIntroVoiceover(options = {}) {
     return false;
   }
 
-  if (!introVoiceover.paused && !introVoiceover.ended) {
+  if (isVoiceoverSource(INTRO_VOICEOVER_SRC) && !voiceoverPlayer.paused && !voiceoverPlayer.ended) {
     if (typeof onDone === "function") {
-      introVoiceover.addEventListener("ended", onDone, { once: true });
-      introVoiceover.addEventListener("error", onDone, { once: true });
+      voiceoverPlayer.addEventListener("ended", onDone, { once: true });
+      voiceoverPlayer.addEventListener("error", onDone, { once: true });
     }
 
     return true;
@@ -212,13 +227,13 @@ function playIntroVoiceover(options = {}) {
 
   hasIntroVoiceoverStarted = true;
 
-  introVoiceover.pause();
-  introVoiceover.currentTime = 0;
-  introVoiceover.volume = 1;
+  setVoiceoverSource(INTRO_VOICEOVER_SRC);
+  voiceoverPlayer.currentTime = 0;
+  voiceoverPlayer.volume = 1;
 
   const finishIntroVoiceover = () => {
-    introVoiceover.removeEventListener("ended", finishIntroVoiceover);
-    introVoiceover.removeEventListener("error", finishIntroVoiceover);
+    voiceoverPlayer.removeEventListener("ended", finishIntroVoiceover);
+    voiceoverPlayer.removeEventListener("error", finishIntroVoiceover);
     isVoiceoverSpeaking = false;
     hasIntroVoiceoverFinished = true;
     fadeMusicVolume();
@@ -228,14 +243,14 @@ function playIntroVoiceover(options = {}) {
     }
   };
 
-  introVoiceover.addEventListener("ended", finishIntroVoiceover, { once: true });
-  introVoiceover.addEventListener("error", finishIntroVoiceover, { once: true });
+  voiceoverPlayer.addEventListener("ended", finishIntroVoiceover, { once: true });
+  voiceoverPlayer.addEventListener("error", finishIntroVoiceover, { once: true });
   isVoiceoverSpeaking = true;
   fadeMusicVolume();
 
-  introVoiceover.play().catch(() => {
-    introVoiceover.removeEventListener("ended", finishIntroVoiceover);
-    introVoiceover.removeEventListener("error", finishIntroVoiceover);
+  voiceoverPlayer.play().catch(() => {
+    voiceoverPlayer.removeEventListener("ended", finishIntroVoiceover);
+    voiceoverPlayer.removeEventListener("error", finishIntroVoiceover);
     hasIntroVoiceoverStarted = false;
     isVoiceoverSpeaking = false;
     hasIntroVoiceoverFinished = typeof onDone === "function";
@@ -257,10 +272,10 @@ function playInsideVoiceover() {
   hasInsideVoiceoverPlayed = true;
 
   window.setTimeout(() => {
-    insideVoiceover.pause();
-    insideVoiceover.currentTime = 0;
-    insideVoiceover.volume = 1;
-    insideVoiceover.play().catch(() => {
+    setVoiceoverSource(INSIDE_VOICEOVER_SRC);
+    voiceoverPlayer.currentTime = 0;
+    voiceoverPlayer.volume = 1;
+    voiceoverPlayer.play().catch(() => {
       isVoiceoverSpeaking = false;
       fadeMusicVolume();
     });
@@ -348,7 +363,7 @@ envelopeButton.addEventListener("keydown", (event) => {
 });
 
 function unlockIntroVoiceover() {
-  if (!hasIntroVoiceoverFinished && introVoiceover.paused) {
+  if (!hasIntroVoiceoverFinished && voiceoverPlayer.paused) {
     playIntroVoiceover({ force: true });
   }
 }
