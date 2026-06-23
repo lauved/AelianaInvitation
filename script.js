@@ -5,7 +5,10 @@ const cursorGlow = document.querySelector(".cursor-glow");
 const musicToggle = document.querySelector(".music-toggle");
 const canUseCursorGlow = window.matchMedia("(hover: hover) and (pointer: fine)").matches;
 const AudioContextConstructor = window.AudioContext || window.webkitAudioContext;
+const introVoiceover = document.querySelector('[data-voiceover="intro"]') || new Audio("assets/intro.mp3");
+const insideVoiceover = document.querySelector('[data-voiceover="inside"]') || new Audio("assets/inside-letter.mp3");
 const MUSIC_VOLUME = 0.16;
+const VOICEOVER_DUCKED_MUSIC_VOLUME = 0.045;
 const MUTED_VOLUME = 0.0001;
 
 let audioContext;
@@ -13,6 +16,38 @@ let musicGain;
 let musicLoopTimer;
 let padNodes = [];
 let isMusicMuted = false;
+let isVoiceoverSpeaking = false;
+let hasIntroVoiceoverStarted = false;
+let hasIntroVoiceoverFinished = false;
+let hasInsideVoiceoverPlayed = false;
+let isWaitingForIntroVoiceover = false;
+let introOpenFallbackTimer;
+
+introVoiceover.preload = "auto";
+introVoiceover.autoplay = true;
+insideVoiceover.preload = "auto";
+
+[introVoiceover, insideVoiceover].forEach((voiceover) => {
+  voiceover.addEventListener("play", () => {
+    isVoiceoverSpeaking = true;
+    fadeMusicVolume();
+  });
+
+  ["ended", "pause", "error"].forEach((eventName) => {
+    voiceover.addEventListener(eventName, () => {
+      isVoiceoverSpeaking = !introVoiceover.paused || !insideVoiceover.paused;
+      fadeMusicVolume();
+    });
+  });
+});
+
+introVoiceover.addEventListener("play", () => {
+  hasIntroVoiceoverStarted = true;
+});
+
+introVoiceover.addEventListener("ended", () => {
+  hasIntroVoiceoverFinished = true;
+});
 
 const lullabyNotes = [
   { frequency: 523.25, duration: 0.9 },
@@ -95,7 +130,15 @@ function updateMusicButton() {
   musicToggle.setAttribute("aria-label", isMusicMuted ? "Play background music" : "Pause background music");
 }
 
-function fadeMusicVolume(targetVolume) {
+function getMusicTargetVolume() {
+  if (isMusicMuted) {
+    return MUTED_VOLUME;
+  }
+
+  return isVoiceoverSpeaking ? VOICEOVER_DUCKED_MUSIC_VOLUME : MUSIC_VOLUME;
+}
+
+function fadeMusicVolume(targetVolume = getMusicTargetVolume()) {
   if (!audioContext || !musicGain) {
     return;
   }
@@ -130,7 +173,7 @@ function startBackgroundMusic() {
   audioContext
     .resume()
     .then(() => {
-      fadeMusicVolume(isMusicMuted ? MUTED_VOLUME : MUSIC_VOLUME);
+      fadeMusicVolume();
       updateMusicButton();
     })
     .catch(() => {
@@ -138,11 +181,135 @@ function startBackgroundMusic() {
     });
 }
 
+function stopVoiceover() {
+  isVoiceoverSpeaking = false;
+  [introVoiceover, insideVoiceover].forEach((voiceover) => {
+    voiceover.pause();
+    voiceover.currentTime = 0;
+  });
+  fadeMusicVolume();
+}
+
+function playIntroVoiceover(options = {}) {
+  const { force = false, onDone } = options;
+
+  if (hasIntroVoiceoverFinished || envelopeButton.classList.contains("is-open")) {
+    return false;
+  }
+
+  if (!introVoiceover.paused && !introVoiceover.ended) {
+    if (typeof onDone === "function") {
+      introVoiceover.addEventListener("ended", onDone, { once: true });
+      introVoiceover.addEventListener("error", onDone, { once: true });
+    }
+
+    return true;
+  }
+
+  if (hasIntroVoiceoverStarted && !force) {
+    return false;
+  }
+
+  hasIntroVoiceoverStarted = true;
+
+  introVoiceover.pause();
+  introVoiceover.currentTime = 0;
+  introVoiceover.volume = 1;
+
+  const finishIntroVoiceover = () => {
+    introVoiceover.removeEventListener("ended", finishIntroVoiceover);
+    introVoiceover.removeEventListener("error", finishIntroVoiceover);
+    isVoiceoverSpeaking = false;
+    hasIntroVoiceoverFinished = true;
+    fadeMusicVolume();
+
+    if (typeof onDone === "function") {
+      onDone();
+    }
+  };
+
+  introVoiceover.addEventListener("ended", finishIntroVoiceover, { once: true });
+  introVoiceover.addEventListener("error", finishIntroVoiceover, { once: true });
+  isVoiceoverSpeaking = true;
+  fadeMusicVolume();
+
+  introVoiceover.play().catch(() => {
+    introVoiceover.removeEventListener("ended", finishIntroVoiceover);
+    introVoiceover.removeEventListener("error", finishIntroVoiceover);
+    hasIntroVoiceoverStarted = false;
+    isVoiceoverSpeaking = false;
+    hasIntroVoiceoverFinished = typeof onDone === "function";
+    fadeMusicVolume();
+
+    if (typeof onDone === "function") {
+      onDone();
+    }
+  });
+
+  return true;
+}
+
+function playInsideVoiceover() {
+  if (hasInsideVoiceoverPlayed) {
+    return;
+  }
+
+  hasInsideVoiceoverPlayed = true;
+
+  window.setTimeout(() => {
+    insideVoiceover.pause();
+    insideVoiceover.currentTime = 0;
+    insideVoiceover.volume = 1;
+    insideVoiceover.play().catch(() => {
+      isVoiceoverSpeaking = false;
+      fadeMusicVolume();
+    });
+  }, 350);
+}
+
+function requestEnvelopeOpen() {
+  if (envelopeButton.classList.contains("is-open")) {
+    return;
+  }
+
+  if (!hasIntroVoiceoverFinished) {
+    if (!isWaitingForIntroVoiceover) {
+      isWaitingForIntroVoiceover = true;
+      tapText.textContent = "listen first";
+      window.clearTimeout(introOpenFallbackTimer);
+
+      playIntroVoiceover({
+        force: true,
+        onDone: () => {
+          window.clearTimeout(introOpenFallbackTimer);
+          isWaitingForIntroVoiceover = false;
+          openEnvelope();
+        },
+      });
+
+      introOpenFallbackTimer = window.setTimeout(() => {
+        if (!isWaitingForIntroVoiceover || envelopeButton.classList.contains("is-open")) {
+          return;
+        }
+
+        hasIntroVoiceoverFinished = true;
+        isWaitingForIntroVoiceover = false;
+        openEnvelope();
+      }, 20000);
+    }
+
+    return;
+  }
+
+  openEnvelope();
+}
+
 function openEnvelope() {
   if (envelopeButton.classList.contains("is-open")) {
     return;
   }
 
+  stopVoiceover();
   startBackgroundMusic();
   document.body.classList.add("is-envelope-open");
   envelopeButton.classList.add("is-open");
@@ -158,6 +325,7 @@ function openEnvelope() {
   window.setTimeout(() => {
     document.body.classList.add("is-invitation-visible");
     insideInvitation.removeAttribute("aria-hidden");
+    playInsideVoiceover();
   }, 1350);
 
   window.setTimeout(() => {
@@ -170,14 +338,24 @@ function openEnvelope() {
   }, 2100);
 }
 
-envelopeButton.addEventListener("click", openEnvelope);
+envelopeButton.addEventListener("click", requestEnvelopeOpen);
 
 envelopeButton.addEventListener("keydown", (event) => {
   if (event.key === "Enter" || event.key === " ") {
     event.preventDefault();
-    openEnvelope();
+    requestEnvelopeOpen();
   }
 });
+
+function unlockIntroVoiceover() {
+  if (!hasIntroVoiceoverFinished && introVoiceover.paused) {
+    playIntroVoiceover({ force: true });
+  }
+}
+
+playIntroVoiceover();
+document.addEventListener("pointerdown", unlockIntroVoiceover, { once: true });
+document.addEventListener("keydown", unlockIntroVoiceover, { once: true });
 
 if (canUseCursorGlow) {
   let cursorX = window.innerWidth / 2;
@@ -212,6 +390,6 @@ musicToggle.addEventListener("click", () => {
   }
 
   isMusicMuted = !isMusicMuted;
-  fadeMusicVolume(isMusicMuted ? MUTED_VOLUME : MUSIC_VOLUME);
+  fadeMusicVolume();
   updateMusicButton();
 });
