@@ -290,7 +290,6 @@ function requestEnvelopeOpen() {
   if (!hasIntroVoiceoverFinished) {
     if (!isWaitingForIntroVoiceover) {
       isWaitingForIntroVoiceover = true;
-      tapText.textContent = "listen first";
       window.clearTimeout(introOpenFallbackTimer);
 
       playIntroVoiceover({
