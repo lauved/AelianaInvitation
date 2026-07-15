@@ -614,11 +614,6 @@ button {
   bottom: 19%;
 }
 
-.letter-card__name {
-  font-family: "Great Vibes", "Brush Script MT", cursive;
-  font-size: clamp(1.55rem, 4.8vw, 3.3rem);
-}
-
 .letter-card__note {
   color: #b98675;
   font-size: clamp(0.68rem, 1.7vw, 0.9rem);
@@ -830,12 +825,6 @@ body.is-invitation-visible .photo-panel {
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-}
-
-.photo-panel__text strong {
-  font-family: "Great Vibes", "Brush Script MT", cursive;
-  font-size: clamp(2.4rem, 12vw, 3.8rem);
-  font-weight: 400;
 }
 
 .message-card {
