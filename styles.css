@@ -432,11 +432,20 @@ button {
 }
 
 .letter-copy p,
-.letter-copy h1,
 .tap-text {
   margin: 0;
   font-family: "Great Vibes", "Brush Script MT", cursive;
   font-weight: 400;
+  line-height: 1.05;
+  text-shadow:
+    0 0.15rem 0 rgba(255, 255, 255, 0.58),
+    0 0 0.85rem rgba(255, 255, 255, 0.92);
+}
+
+.letter-copy h1 {
+  margin: 0;
+  font-family: "Comic Sans MS", "Comic Sans", cursive;
+  font-weight: 700;
   line-height: 1.05;
   text-shadow:
     0 0.15rem 0 rgba(255, 255, 255, 0.58),
@@ -449,10 +458,10 @@ button {
 }
 
 .letter-copy h1 {
-  font-family: "Comic Sans MS", "Comic Sans", cursive;
+    font-family: "Comic Sans MS", "Comic Sans", cursive !important;
   color: #ff9bac;
   font-size: clamp(2.35rem, 7vw, 4.4rem);
-  font-weight: bold;
+  font-weight: 1000;
 }
 
 .envelope-button {
